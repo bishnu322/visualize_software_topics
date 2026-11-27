@@ -1,0 +1,56 @@
+import { CdnViz } from '@/components/lessons/system-design/cdn/CdnViz'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+No matter how fast your servers are, you can't beat the **speed of light**. A user in Sydney talking to a server in Virginia is ~16,000 km away; each round trip takes over 200 ms, and loading a page needs several round trips.
+
+A **Content Delivery Network (CDN)** is a global network of caching servers, called **edge servers** or **PoPs** (points of presence), placed close to users. Static content (images, videos, CSS, JavaScript, even whole pages) is served from the nearest edge instead of the faraway **origin** server.
+
+<Callout type="analogy">
+Instead of every customer flying to the one factory to buy a product, the company stocks **local warehouses** in every city. The first order in a city ships from the factory and stocks the warehouse; every later order is delivered locally the same day.
+</Callout>
+
+## Try it
+
+1. With **CDN: OFF**, load the page from every city. Far-away users suffer.
+2. Turn **CDN: ON** and load again. The first load is a **MISS**: the edge fetches from the origin once.
+3. Load **again**. Now every city gets a **HIT** from its local edge.
+
+<CdnViz />
+
+## What a CDN gives you
+
+- **Lower latency**: content travels hundreds of km instead of thousands.
+- **Less load on the origin**: the origin serves each file once per edge, not once per user.
+- **Absorbs traffic spikes and DDoS attacks**: the CDN's huge capacity takes the hit.
+- **TLS termination near the user**: handshakes complete faster.
+
+| Content | Cache at edge? | Typical TTL |
+|---|---|---|
+| Images, video, fonts | Yes | Days–a year (use versioned filenames) |
+| CSS / JS bundles | Yes | A year, with a hash in the filename (`app.3f9a.js`) |
+| Public HTML pages | Often | Seconds–minutes |
+| Personalised / logged-in API responses | Usually no | Not cached (or per-user at edge compute) |
+
+<DeepDive title="Deep dive: push vs pull, invalidation and routing">
+
+- **Pull CDN** (most common): the edge fetches from the origin on the first miss, as in the simulator. **Push CDN**: you upload content to the CDN ahead of time (good for large, rarely changing files).
+- **Controlling caching**: the origin sends `Cache-Control: public, max-age=31536000, immutable` for versioned assets and `s-maxage` for shared caches. `ETag`/`Last-Modified` allow cheap revalidation (304 Not Modified).
+- **Invalidation**: purge by URL or tag when content changes; or avoid purging entirely by changing the filename (cache busting).
+- **How users reach the nearest edge**: **anycast** (the same IP is announced from every PoP and BGP routes to the closest) or **GeoDNS** (DNS answers with a nearby PoP's IP).
+- **Origin shield**: a middle cache tier so 300 edges don't all miss to the origin at once.
+- **Edge compute**: Cloudflare Workers, Lambda@Edge and Fastly Compute run code at the PoP for personalisation, A/B tests and auth.
+- **Physics**: light in fiber travels at ~200,000 km/s, so 1,000 km ≈ 5 ms one way, ≈ 10 ms round trip before any routing overhead.
+
+</DeepDive>
+
+<Quiz
+  slug="cdn"
+  questions={[
+    { q: 'What is the main reason a CDN reduces latency?', options: ['It compresses everything', 'Content is served from a server physically closer to the user', 'It uses faster CPUs', 'It skips TCP'], answer: 1, why: 'Shorter distance means shorter round trips; physics sets the floor on latency.' },
+    { q: 'The first request for a file at an edge in a pull CDN is…', options: ['Always a hit', 'A miss: the edge fetches it from the origin', 'Rejected', 'Sent to another user'], answer: 1, why: 'Pull CDNs populate the edge lazily on the first miss.' },
+    { q: 'Which content is the LEAST suitable for CDN caching?', options: ['Product images', 'A versioned JS bundle', 'A user\'s private bank balance', 'Web fonts'], answer: 2, why: 'Personalised, private data must not be served to other users from a shared cache.' },
+    { q: 'How do apps update a CDN-cached file without waiting for its TTL?', options: ['Restart the CDN', 'Change the filename (e.g. add a content hash) or purge it', 'Lower the user\'s bandwidth', 'Use UDP'], answer: 1, why: 'Cache busting (new URL) or an explicit purge/invalidation.' },
+  ]}
+/>

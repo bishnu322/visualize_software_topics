@@ -1,0 +1,66 @@
+import { ArpSim3D } from '@/components/lessons/networks/switching-arp/ArpSim3D'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+Inside a local network (a **LAN**), devices don't deliver data using IP addresses directly. They use **MAC addresses**, the hardware address burned into every network card, like `AA:BB:CC:11:22:33` (48 bits, written in hex).
+
+Two questions need answering:
+
+1. **The switch's question**: "Which port leads to this MAC address?" Answered by **MAC learning**.
+2. **The host's question**: "I know the IP I want to reach. What is its MAC address?" Answered by **ARP** (Address Resolution Protocol).
+
+## How a switch learns
+
+A switch starts with an **empty MAC address table**. For every frame it receives, it:
+
+1. **Learns**: records the frame's *source* MAC and the port it came in on.
+2. **Forwards**: looks up the *destination* MAC.
+   - Found → send out **only** that port (*known unicast*).
+   - Not found, or broadcast `FF:FF:FF:FF:FF:FF` → send out **every other port** (*flood*).
+3. **Filters**: if the destination is on the same port it came from, drop it.
+
+## How ARP works
+
+Watch the full exchange. Host **A** knows C's IP (`192.168.1.30`) but not its MAC:
+
+<ArpSim3D />
+
+<Callout type="analogy">
+ARP is like shouting in a room: "**Who is 192.168.1.30?**" Everyone hears it (broadcast), but only that person answers, and they walk over and tell you directly (unicast). The switch is the person at the door who remembers where everyone is sitting.
+</Callout>
+
+<Callout type="info" title="What if the destination is on another network?">
+The host checks: "Is the destination IP in my subnet?" If **not**, it sends the frame to its **default gateway** (router) instead. So it ARPs for the **router's MAC**, not the remote host's. The IP header still holds the final destination IP.
+</Callout>
+
+## Hub vs switch vs router
+
+| Device | Layer | Forwards by | Behaviour |
+|---|---|---|---|
+| Hub | 1 | nothing (repeats bits) | Sends everything everywhere. One collision domain |
+| Switch | 2 | MAC address | Learns ports, forwards only where needed. Each port is its own collision domain |
+| Router | 3 | IP address | Connects different networks. Each interface is its own **broadcast** domain |
+
+<DeepDive title="Deep dive: VLANs, ARP security, and switch internals">
+
+- **ARP packet**: EtherType `0x0806`. Opcode 1 = request, 2 = reply. Fields: hardware type, protocol type, sender MAC/IP, target MAC/IP.
+- **Cache timers**: Windows ~15–45 s, Linux ~30 s reachable state; Cisco IOS ARP default 4 hours. MAC table aging default **300 s**.
+- **Gratuitous ARP**: a host announces its own IP→MAC (after boot, or HSRP/VRRP failover) so others update their caches.
+- **ARP spoofing / poisoning**: attackers send fake replies to become man-in-the-middle. Mitigation: **Dynamic ARP Inspection (DAI)** with **DHCP snooping**.
+- **CAM table overflow**: flooding fake MACs fills the table so the switch floods everything. Mitigation: **port security** (limit MACs per port).
+- **VLANs (802.1Q)** split one switch into multiple broadcast domains. Trunk links carry a 4-byte tag with a 12-bit VLAN ID (1–4094). Inter-VLAN traffic needs a router or L3 switch.
+- **IPv6 has no ARP**: it uses **NDP** (Neighbor Solicitation/Advertisement over ICMPv6 multicast).
+- `arp -a` (Windows/macOS) or `ip neigh` (Linux) shows your ARP cache. On Cisco: `show mac address-table`, `show ip arp`.
+
+</DeepDive>
+
+<Quiz
+  slug="switching-arp"
+  questions={[
+    { q: 'What does a switch learn from each incoming frame?', options: ['Destination MAC → port', 'Source MAC → port', 'Source IP → port', 'Destination IP → MAC'], answer: 1, why: 'Switches learn from the SOURCE MAC address and the port the frame arrived on.' },
+    { q: 'What is the destination MAC of an ARP request?', options: ['00:00:00:00:00:00', 'The router\'s MAC', 'FF:FF:FF:FF:FF:FF', 'The target\'s MAC'], answer: 2, why: 'ARP requests are broadcast so every host on the LAN receives them.' },
+    { q: 'A switch receives a frame for a MAC that is NOT in its table. It…', options: ['Drops it', 'Floods it out all ports except the incoming one', 'Sends it to the router', 'Sends an ARP request'], answer: 1, why: 'Unknown unicast is flooded; the reply will then teach the switch where that MAC is.' },
+    { q: 'Host 10.1.1.5/24 wants to reach 8.8.8.8. Whose MAC does it ARP for?', options: ['8.8.8.8', 'Its default gateway', 'The DNS server', 'Nobody, it broadcasts the packet'], answer: 1, why: '8.8.8.8 is off-subnet, so the frame goes to the default gateway; only its MAC is needed.' },
+  ]}
+/>

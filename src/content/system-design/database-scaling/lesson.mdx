@@ -1,0 +1,61 @@
+import { DatabaseScalingViz } from '@/components/lessons/system-design/database-scaling/DatabaseScalingViz'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+App servers are easy to scale: they're stateless, so you just add more. The **database** is harder because it holds the state. There are two complementary techniques:
+
+- **Replication**: keep **copies** of the same data on several servers. Helps with *reads* and *availability*.
+- **Sharding** (partitioning): **split** the data so each server holds only part of it. Helps with *writes* and *storage size*.
+
+<Callout type="analogy">
+A library. **Replication** = buying several copies of the same popular book so more people can read at once, and if one copy is damaged you still have others. **Sharding** = splitting the collection across buildings: A–M in one, N–Z in another, because one building can't hold every book.
+</Callout>
+
+## Replication
+
+Step through what happens on writes, during **replication lag**, and when the primary **fails**:
+
+<DatabaseScalingViz initial="replication" />
+
+| | Async replication | Sync replication |
+|---|---|---|
+| Write latency | Fast: primary confirms alone | Slower: waits for replica(s) |
+| Data loss on primary crash | Possible (un-replicated writes) | None |
+| Typical use | Read replicas, cross-region | Same-region standby (e.g. RDS Multi-AZ) |
+
+## Sharding
+
+When one machine can't handle all the **writes** or hold all the **data**, split it. Each row goes to a shard based on its **shard key** (e.g. `user_id`). The question is *how* you map keys to shards:
+
+- **`hash(key) % N`**: simple, but when N changes almost **every** key maps somewhere new, meaning a massive data migration.
+- **Consistent hashing**: shards and keys are placed on a ring; each key belongs to the next shard clockwise. Adding a shard only takes keys from its neighbours: about **1/N** of the data moves.
+
+Switch to the **Sharding** tab and add a shard with each method:
+
+<DatabaseScalingViz initial="sharding" />
+
+<Callout type="warn" title="Sharding has real costs">
+Queries that span shards (joins, global counts, "top 10 overall") get slow and complex. Transactions across shards are hard. A bad shard key creates **hot spots** (e.g. sharding by date puts all of today's writes on one shard). Shard only when replication, caching and a bigger machine aren't enough.
+</Callout>
+
+<DeepDive title="Deep dive: strategies and real systems">
+
+- **Sharding strategies**: *range* (A–M, N–Z: good for range scans, prone to hot spots), *hash* (even spread, no range scans), *directory/lookup* (a service maps key → shard; flexible but an extra hop), *geo* (EU users on EU shards).
+- **Virtual nodes**: each physical shard owns many points on the ring for an even spread and smoother rebalancing (the simulator uses 4; Cassandra uses 16–256).
+- **Real systems**: Cassandra & DynamoDB (consistent hashing), MongoDB (range or hashed sharding), Vitess (MySQL sharding at YouTube), Citus (Postgres).
+- **Replication topologies**: single-leader (simple, the default), multi-leader (writes in several regions, needs conflict resolution), leaderless (Dynamo-style quorums: write to W of N, read from R of N).
+- **Split brain**: during a network partition two nodes both think they're primary. Prevent it with consensus (Raft/Paxos) or fencing tokens.
+- **Rule of thumb**: one well-tuned Postgres/MySQL instance handles thousands of writes/sec and terabytes of data. Many companies never need to shard.
+
+</DeepDive>
+
+<Quiz
+  slug="database-scaling"
+  questions={[
+    { q: 'Your app is read-heavy and the DB CPU is maxed by SELECTs. First step?', options: ['Shard the database', 'Add read replicas (and caching)', 'Switch to write-back caching', 'Delete indexes'], answer: 1, why: 'Replicas multiply read capacity with far less complexity than sharding.' },
+    { q: 'A user updates their profile, refreshes, and sees the old data. Likely cause?', options: ['Sharding', 'Replication lag: the read hit a replica', 'A CDN miss', 'Rate limiting'], answer: 1, why: 'Async replicas can trail the primary; fix with read-your-own-writes routing.' },
+    { q: 'Going from 4 to 5 shards with hash(key) % N moves roughly…', options: ['20% of keys', '50% of keys', '80% of keys', '0% of keys'], answer: 2, why: 'Only keys where k%4 == k%5 stay put, roughly 1 in 5. Consistent hashing moves ~20%.' },
+    { q: 'What is a hot spot in sharding?', options: ['A shard that receives a disproportionate share of traffic', 'An overheated server room', 'A cached key', 'A failed replica'], answer: 0, why: 'A poorly chosen shard key (e.g. timestamp, celebrity user) concentrates load on one shard.' },
+  ]}
+/>

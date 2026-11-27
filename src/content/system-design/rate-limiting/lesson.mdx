@@ -1,0 +1,59 @@
+import { RateLimiterViz } from '@/components/lessons/system-design/rate-limiting/RateLimiterViz'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+A **rate limiter** caps how many requests a client can make in a period of time, for example *100 requests per minute per API key*. Extra requests are rejected with **HTTP 429 Too Many Requests**.
+
+Why bother?
+
+- **Protect the service** from overload, buggy clients stuck in retry loops, and denial-of-service attacks.
+- **Fairness**: one heavy user can't starve everyone else.
+- **Cost control & business rules**: free tier = 1,000 calls/day, paid tier = 100,000.
+- **Security**: slow down password guessing (5 login attempts per minute).
+
+<Callout type="analogy">
+A **token bucket** is like an arcade card: it holds up to 5 credits and refills one credit every few seconds. Each game costs a credit. You can play 5 games back to back (a burst), but then you must wait for credits to refill.
+</Callout>
+
+## Try it
+
+The limit is **5 requests per 3 seconds**. For each algorithm, try **Burst of 10**, then wait and try again.
+
+<RateLimiterViz />
+
+<Callout type="tip" title="Find the fixed-window loophole">
+In **Fixed window**, wait until just before a dashed boundary, burst, then burst again right after it. You'll get **10** requests through in a fraction of a second, twice the limit. The sliding window doesn't allow this.
+</Callout>
+
+## Comparing algorithms
+
+| Algorithm | Allows bursts? | Precision | Memory per client |
+|---|---|---|---|
+| Token bucket | Yes, up to bucket size | Good | 2 numbers (tokens, last refill) |
+| Leaky bucket | No: smooths to a constant rate | Good | A queue |
+| Fixed window counter | Yes, 2× at boundaries | Approximate | 1 counter |
+| Sliding window log | No | Exact | One timestamp per request |
+| Sliding window counter | Small | Very good | 2 counters (weighted average of current and previous window) |
+
+<DeepDive title="Deep dive: distributed rate limiting">
+
+- **Where to limit**: API gateway or edge (Nginx `limit_req`, Envoy, Kong, Cloudflare, AWS API Gateway), or in the app with a shared store.
+- **Distributed counters**: with many app servers, counters live in **Redis**. Use atomic operations (`INCR` + `EXPIRE`, or a Lua script for token bucket) to avoid race conditions between servers.
+- **What to key on**: API key/user ID (best), IP (careful: many users share an IP behind NAT), endpoint, or a combination.
+- **Good 429 responses** include `Retry-After` and headers like `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, so clients can back off politely.
+- **Client side**: retry with **exponential backoff + jitter** (wait 1s, 2s, 4s… plus randomness) so retries don't stampede.
+- **Token bucket** is used by AWS, Stripe and most cloud APIs. Nginx `limit_req` is a leaky bucket.
+- **Load shedding** is different: it drops requests when the *server* is overloaded, regardless of who sent them.
+
+</DeepDive>
+
+<Quiz
+  slug="rate-limiting"
+  questions={[
+    { q: 'What HTTP status code signals a client was rate limited?', options: ['403 Forbidden', '404 Not Found', '429 Too Many Requests', '503 Service Unavailable'], answer: 2, why: '429 is the standard code; include Retry-After so the client knows when to try again.' },
+    { q: 'Which algorithm intentionally allows short bursts up to a limit?', options: ['Sliding window log', 'Token bucket', 'Leaky bucket', 'None of them'], answer: 1, why: 'A full bucket can be spent at once; afterwards the refill rate limits the client.' },
+    { q: 'Limit 100/minute with a fixed window. Worst case in a short span?', options: ['100', '150', '200', '1000'], answer: 2, why: '100 at 0:59 and 100 at 1:00: two windows back to back.' },
+    { q: 'Rate limiting across 20 app servers needs…', options: ['A shared counter store like Redis', 'Each server counting alone', 'A bigger CDN', 'Sharding the database'], answer: 0, why: 'Otherwise each server allows the full limit and the client gets 20× the quota.' },
+  ]}
+/>

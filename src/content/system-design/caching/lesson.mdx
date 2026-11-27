@@ -1,0 +1,64 @@
+import { CacheSimulator } from '@/components/lessons/system-design/caching/CacheSimulator'
+import { WritePolicies } from '@/components/lessons/system-design/caching/WritePolicies'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+A **cache** is a small, fast store that keeps copies of data you'll probably need again. Reading from memory (Redis, ~1 ms) is often **50× faster** than going to the database (~50 ms), and every hit is one less query the database has to handle.
+
+Caching works because traffic is **skewed**: a few items (the homepage, popular products, celebrity profiles) get most of the requests. Keep those few in memory and you serve most traffic without touching the database.
+
+<Callout type="analogy">
+Your desk vs the library. Books you're using right now stay on your desk (cache). When the desk is full and you need a new book, you return the one you haven't touched in the longest time (**LRU**) to the shelf (database).
+</Callout>
+
+## Key terms
+
+- **Hit**: the data was in the cache. **Miss**: it wasn't, so we went to the database.
+- **Hit ratio** = hits ÷ total requests. The main number you watch.
+- **Eviction**: when the cache is full, something must be removed. **LRU** (least recently used) and **LFU** (least frequently used) are the common policies.
+- **TTL** (time to live): an expiry time so stale data eventually disappears.
+
+## Try it
+
+Press **Send requests**. Then change the **cache size**: notice how a cache holding just 15% of the keys already gets a large share of hits, because of the skew. Compare LRU and LFU.
+
+<CacheSimulator />
+
+## Writing: keeping the cache correct
+
+Reading is the easy part. When data **changes**, the cache and database can disagree. Each strategy makes a different trade-off:
+
+<WritePolicies />
+
+| Strategy | Write path | Reads stale? | Write speed | Risk |
+|---|---|---|---|---|
+| Cache-aside | App writes DB, deletes cache key | Briefly possible | DB speed | Most common, simple |
+| Write-through | Cache writes DB synchronously | No | Slower | Caches unused data |
+| Write-back | Cache only; DB later in batches | No (from cache) | Fastest | Data loss if cache dies |
+
+<Callout type="warn" title="The two hard things">
+"There are only two hard things in Computer Science: **cache invalidation** and naming things." Every cache needs a plan for how stale data gets removed: TTLs, explicit deletes on write, or both.
+</Callout>
+
+<DeepDive title="Deep dive: where caches live and what goes wrong">
+
+- **Cache layers**: browser cache (HTTP `Cache-Control`) → CDN (lesson 4) → reverse proxy (Varnish/Nginx) → application cache (Redis, Memcached) → database buffer pool → OS page cache → CPU L1/L2/L3.
+- **Redis vs Memcached**: Redis has data structures (lists, sorted sets, streams), persistence and replication; Memcached is a simpler multi-threaded key-value store.
+- **Thundering herd / cache stampede**: a hot key expires and 10,000 requests hit the DB at once. Fixes: request coalescing (only one request reloads, using a lock), early probabilistic refresh, stale-while-revalidate.
+- **Cache penetration**: requests for keys that don't exist always miss. Fix: cache the "not found" result briefly, or use a Bloom filter.
+- **Cache avalanche**: many keys expire at the same moment. Fix: add random jitter to TTLs.
+- **Eviction in practice**: Redis offers `allkeys-lru`, `allkeys-lfu`, `volatile-ttl` and others; it uses *approximate* LRU (samples a few keys) to save memory.
+- **Hot keys**: one key gets so much traffic that one cache node melts. Fixes: replicate the key, or add a small local in-process cache in front.
+
+</DeepDive>
+
+<Quiz
+  slug="caching"
+  questions={[
+    { q: '900 hits and 100 misses. What is the hit ratio?', options: ['10%', '90%', '9%', '1000'], answer: 1, why: 'Hits ÷ total = 900 ÷ 1000 = 90%.' },
+    { q: 'An LRU cache is full. Which key is evicted?', options: ['The newest key', 'The key used least recently', 'The key used least often', 'A random key'], answer: 1, why: 'LRU removes the entry that hasn\'t been accessed for the longest time.' },
+    { q: 'Which strategy risks losing writes if the cache crashes?', options: ['Cache-aside', 'Write-through', 'Write-back', 'Read-through'], answer: 2, why: 'Write-back acknowledges before the DB has the data; unflushed writes are lost on a crash.' },
+    { q: 'In cache-aside, what should the app do to the cache after updating the database?', options: ['Nothing', 'Delete (invalidate) the key', 'Flush the entire cache', 'Restart the cache'], answer: 1, why: 'Deleting the key forces the next read to load the fresh value from the DB.' },
+  ]}
+/>

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { AppShell } from '@/layout/AppShell'
+import { AppShell } from '@/components/layout/AppShell'
+import { LearnRedirect } from '@/components/topic/LearnRedirect'
 import { useThemeSync } from '@/hooks/useTheme'
 import Home from '@/pages/Home'
 import NotFound from '@/pages/NotFound'
@@ -16,7 +17,8 @@ export default function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Home />} />
-            <Route path="learn/:slug" element={<TopicPage />} />
+            <Route path="learn/:course/:slug" element={<TopicPage />} />
+            <Route path="learn/:param" element={<LearnRedirect />} />
             <Route path="playground" element={<Playground />} />
             <Route path="*" element={<NotFound />} />
           </Route>

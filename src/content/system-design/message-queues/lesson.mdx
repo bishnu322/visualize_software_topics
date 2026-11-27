@@ -1,0 +1,63 @@
+import { QueueSimulator } from '@/components/lessons/system-design/message-queues/QueueSimulator'
+import { PubSubDemo } from '@/components/lessons/system-design/message-queues/PubSubDemo'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+When a user uploads a video, you don't make them wait while it's transcoded into 6 resolutions. You say "got it!" immediately and do the heavy work **in the background**. A **message queue** is what makes this possible.
+
+A **producer** puts a message (a small "job ticket") into the queue. One or more **consumers** (workers) take messages off the queue and process them, at their own pace.
+
+<Callout type="analogy">
+A restaurant's order rail. Waiters (producers) clip orders onto the rail and go back to customers; cooks (consumers) take the oldest ticket when they're free. A rush of orders makes the rail longer, but nobody is turned away, and adding a cook clears it faster.
+</Callout>
+
+## Why use a queue?
+
+- **Decoupling**: the producer doesn't need to know who processes the work, or wait for them.
+- **Absorbing spikes**: a sudden burst lands in the queue instead of crashing your workers. They catch up later.
+- **Scaling workers independently**: add consumers when the queue grows.
+- **Reliability**: if a worker crashes mid-job, the message is redelivered to another worker.
+
+## Try it
+
+Start the simulation with the producer rate higher than the consumers can handle: the queue **grows** (and eventually starts dropping messages). Then add consumers until the line turns down.
+
+<QueueSimulator />
+
+The rule is simple: if messages **arrive faster than they're processed**, the queue grows without limit. **Queue depth** (and the age of the oldest message) is the metric you autoscale workers on.
+
+## Point-to-point vs publish/subscribe
+
+- **Work queue (point-to-point)**: each message goes to **one** consumer. Used for jobs: "resize this image".
+- **Pub/Sub (topics)**: each message goes to **every** subscriber. Used for events: "an order was placed", which email, inventory and analytics all react to independently.
+
+<PubSubDemo />
+
+| | Work queue | Pub/Sub |
+|---|---|---|
+| Each message delivered to | One consumer | Every subscriber |
+| Typical use | Background jobs | Events, notifications, data pipelines |
+| Examples | RabbitMQ, SQS, Celery | Kafka, SNS, Google Pub/Sub, Redis Streams |
+
+<DeepDive title="Deep dive: delivery guarantees and Kafka">
+
+- **Delivery semantics**: *at-most-once* (may lose), *at-least-once* (may duplicate, the common default), *exactly-once* (expensive; usually approximated as at-least-once + **idempotent** consumers that can safely process the same message twice).
+- **Acknowledgements**: a consumer ACKs after finishing. If it dies first, the visibility timeout expires (SQS) or the channel closes (RabbitMQ) and the message is redelivered. The simulator does the same when you remove a worker mid-job.
+- **Dead-letter queue (DLQ)**: messages that fail N times are moved aside for inspection, so one "poison" message doesn't block everything.
+- **Ordering**: global ordering limits throughput. Kafka guarantees order *within a partition*, so choose a partition key (e.g. `user_id`) for per-user ordering.
+- **Kafka is a log, not a queue**: messages are retained (e.g. 7 days) and each consumer group tracks its own offset, so new consumers can replay history.
+- **Backpressure**: when consumers can't keep up, either buffer (queue grows), drop, or slow the producer down (e.g. return 429/503).
+- **Little's law**: average messages in the system = arrival rate × average time in system.
+
+</DeepDive>
+
+<Quiz
+  slug="message-queues"
+  questions={[
+    { q: 'Producers add 100 msg/s; 4 workers each handle 20 msg/s. What happens?', options: ['Queue stays empty', 'Queue grows by ~20 msg/s', 'Queue shrinks', 'Workers speed up'], answer: 1, why: 'Capacity is 4 × 20 = 80 msg/s, so 20 msg/s accumulate. Add at least one more worker.' },
+    { q: 'An "order placed" event must trigger email, inventory and analytics. Best fit?', options: ['A single work queue', 'Pub/Sub topic with three subscribers', 'A database trigger', 'A cron job'], answer: 1, why: 'Pub/Sub fans each event out to every interested service independently.' },
+    { q: 'With at-least-once delivery, consumers should be…', options: ['Stateless', 'Idempotent (safe to process the same message twice)', 'Single-threaded', 'Synchronous'], answer: 1, why: 'Redelivery can cause duplicates, so processing must tolerate them.' },
+    { q: 'What is a dead-letter queue for?', options: ['Deleted users', 'Messages that keep failing, set aside for inspection', 'Low-priority messages', 'Encrypted messages'], answer: 1, why: 'It stops poison messages from being retried forever and blocking the queue.' },
+  ]}
+/>

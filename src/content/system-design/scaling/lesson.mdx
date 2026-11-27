@@ -1,0 +1,59 @@
+import { ScalingViz } from '@/components/lessons/system-design/scaling/ScalingViz'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+Every app starts the same way: some **clients** (browsers, phones) send requests to a **server**, which does the work and replies. That's the **client–server model**, and one server is plenty, until it isn't.
+
+As traffic grows, the server's CPU, memory or network fills up. Requests start waiting in line (**latency** rises), and eventually the server can't keep up and requests **fail**. There are two ways out.
+
+<Callout type="analogy">
+A busy café with one barista. **Vertical scaling** = hire a faster barista with a bigger espresso machine. **Horizontal scaling** = hire more baristas and put someone at the door directing customers to whoever is free (a **load balancer**).
+</Callout>
+
+## Try it
+
+Push the traffic slider up until the server turns red. Then fix it: first by buying a bigger machine, then by switching to **Horizontal** and adding servers. Watch the cost.
+
+<ScalingViz />
+
+Notice two things:
+
+1. **Latency climbs long before 100%.** At 50% utilisation requests barely wait; at 90% they wait 10× longer. Teams usually scale out at around 60–70% so they have headroom for spikes.
+2. **Vertical scaling hits a ceiling.** There's always a biggest machine you can buy, and big machines cost disproportionately more. Horizontal scaling keeps going, and you pay roughly linearly.
+
+## Vertical vs horizontal
+
+| | Vertical (scale up) | Horizontal (scale out) |
+|---|---|---|
+| How | Bigger CPU/RAM on one machine | More machines behind a load balancer |
+| Limit | Hardware ceiling | Practically unlimited |
+| Cost curve | Gets expensive fast | Roughly linear |
+| Failure | One machine = single point of failure | One dies, others keep serving |
+| Complexity | None: same code | Needs a load balancer and **stateless** servers |
+| Good for | Databases, quick fixes, early stage | Web/API tiers, anything at scale |
+
+<Callout type="warn" title="The catch: state">
+To scale horizontally, any server must be able to handle any request. If server 1 keeps your login session in its memory, server 2 doesn't know you. So keep app servers **stateless**: store sessions in a shared cache (Redis) or a signed token (JWT), and files in object storage (S3).
+</Callout>
+
+<DeepDive title="Deep dive: numbers and patterns">
+
+- **Why latency explodes**: in queueing theory (M/M/1), average time in system = service time ÷ (1 − utilisation). At ρ = 0.5 it's 2×, ρ = 0.9 it's 10×, ρ = 0.99 it's 100×. This is the curve the simulator uses.
+- **Autoscaling**: cloud groups (AWS Auto Scaling, Kubernetes HPA) add or remove instances based on CPU, request count or queue depth. Scale out fast, scale in slowly to avoid flapping.
+- **Back-of-envelope**: 1M daily active users × 20 requests/day ≈ 230 req/s on average; peak is often 2–5× → plan for ~1,000 req/s.
+- **Latency numbers to know**: L1 cache 1 ns · RAM 100 ns · SSD read 100 µs · same-datacenter round trip 0.5 ms · cross-continent round trip 100–150 ms.
+- **Scaling the data tier** is harder than scaling stateless servers: that's replication and sharding (lesson 5).
+- **Amdahl's law**: the part of the work that can't be parallelised limits how much more machines can help.
+
+</DeepDive>
+
+<Quiz
+  slug="scaling"
+  questions={[
+    { q: 'Adding more servers behind a load balancer is called…', options: ['Vertical scaling', 'Horizontal scaling', 'Sharding', 'Caching'], answer: 1, why: 'Scaling out = more machines; scaling up = bigger machine.' },
+    { q: 'Why must app servers be stateless to scale horizontally?', options: ['Stateless code runs faster', 'Any server must be able to handle any request', 'Load balancers can\'t send cookies', 'To save disk space'], answer: 1, why: 'If state lives in one server\'s memory, requests routed elsewhere won\'t see it. Move state to a shared store.' },
+    { q: 'A server at 90% CPU compared to 50% CPU has…', options: ['About the same latency', 'Slightly higher latency', 'Much higher latency (queueing)', 'Lower latency'], answer: 2, why: 'Waiting time grows like 1/(1−ρ): about 10× at 90% vs 2× at 50%.' },
+    { q: 'Which is a real limit of vertical scaling?', options: ['It needs a load balancer', 'There is a largest machine you can buy', 'It requires stateless code', 'It increases network hops'], answer: 1, why: 'Hardware has a ceiling, and the biggest machines are very expensive. It also remains a single point of failure.' },
+  ]}
+/>

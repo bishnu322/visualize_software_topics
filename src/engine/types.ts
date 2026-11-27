@@ -7,7 +7,7 @@ export interface Step<T = unknown> {
   data: T
 }
 
-export type DeviceType = 'pc' | 'laptop' | 'router' | 'switch' | 'server' | 'cloud'
+export type DeviceType = 'pc' | 'laptop' | 'router' | 'switch' | 'server' | 'cloud' | 'database' | 'loadbalancer' | 'queue' | 'cache'
 
 export interface Device {
   id: string

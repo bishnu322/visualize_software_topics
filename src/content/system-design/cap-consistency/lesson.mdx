@@ -1,0 +1,62 @@
+import { CapViz } from '@/components/lessons/system-design/cap-consistency/CapViz'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+When data is copied across several machines (replication, lesson 5), the machines must talk to each other to stay in sync. But networks fail: cables are cut, switches reboot, a data center loses its link. The **CAP theorem** says what you can and can't promise when that happens.
+
+- **C: Consistency**: every read returns the most recent write (all nodes show the same data).
+- **A: Availability**: every request to a working node gets a (non-error) response.
+- **P: Partition tolerance**: the system keeps operating even when nodes can't communicate.
+
+**The theorem: when a network partition happens, you must choose between C and A.** Since partitions are unavoidable in a distributed system, the real choice is **CP** or **AP**.
+
+<Callout type="analogy">
+Two bank branches whose phone line is cut. A customer asks branch 2 for their balance. Branch 2 can **refuse to answer** until the line is back, so it never shows a wrong balance (**CP**). Or it can **answer with the last balance it knew**, which might be out of date (**AP**). It can't be both always-correct and always-answering.
+</Callout>
+
+## Try it
+
+Run the scenario in **CP** mode, then switch to **AP** and run it again. Watch what node C does after it gets cut off.
+
+<CapViz />
+
+## CP or AP?
+
+| | CP systems | AP systems |
+|---|---|---|
+| During a partition | Minority side refuses requests | Every node answers, maybe with stale data |
+| After it heals | Nothing to fix | Conflicts must be resolved |
+| Good for | Payments, inventory counts, locks, leader election, config | Social feeds, likes, shopping carts, DNS, analytics |
+| Examples | ZooKeeper, etcd, Spanner, HBase, MongoDB (majority) | Cassandra, DynamoDB, Riak, CouchDB |
+
+<Callout type="info" title="It's a spectrum, not a switch">
+Many databases let you choose per request. Cassandra and DynamoDB let you ask for strongly consistent reads at the cost of latency and availability. Most of the time there is no partition, and the everyday trade-off is **latency vs consistency** (see PACELC below).
+</Callout>
+
+## Consistency models
+
+- **Strong (linearizable)**: once a write completes, every later read sees it. Like a single machine.
+- **Eventual**: if writes stop, all replicas *eventually* converge. Reads in between may be stale.
+- **In between**: *read-your-own-writes* (you always see your own updates), *monotonic reads* (never go back in time), *causal* (if B was caused by A, everyone sees A before B).
+
+<DeepDive title="Deep dive: quorums, PACELC and conflict resolution">
+
+- **Quorums**: with **N** replicas, write to **W** and read from **R**. If **W + R > N**, every read set overlaps every write set, so reads see the latest write. N=3, W=2, R=2 is the classic choice. W=1, R=1 is fast but only eventually consistent.
+- **PACELC**: if **P**artition → choose **A** or **C**; **E**lse (normal operation) → choose **L**atency or **C**onsistency. DynamoDB/Cassandra are PA/EL; Spanner is PC/EC.
+- **Consensus**: CP systems use **Raft** or **Paxos**: a leader is elected by majority, and writes commit once a majority acknowledges. With 5 nodes you tolerate 2 failures.
+- **Conflict resolution in AP systems**: *last-write-wins* (simple, silently loses data, as in the AP scenario), *vector clocks* (detect concurrent writes, let the app merge), *CRDTs* (data types that merge automatically, e.g. counters and sets used in collaborative editing).
+- **"CA" systems** only exist when there's no network to partition, i.e. a single node. Any multi-node system must tolerate P.
+- **ACID vs BASE**: traditional databases offer ACID transactions; many AP stores describe themselves as BASE (Basically Available, Soft state, Eventually consistent).
+
+</DeepDive>
+
+<Quiz
+  slug="cap-consistency"
+  questions={[
+    { q: 'During a network partition, a distributed database must choose between…', options: ['Speed and cost', 'Consistency and availability', 'SQL and NoSQL', 'Reads and writes'], answer: 1, why: 'Partition tolerance is required, so the trade-off is C vs A while the partition lasts.' },
+    { q: 'A bank ledger should usually be…', options: ['AP', 'CP', 'Neither', 'Cached only'], answer: 1, why: 'Showing a wrong balance or double-spending is worse than briefly rejecting requests.' },
+    { q: 'With N = 3 replicas, which setting guarantees reads see the latest write?', options: ['W=1, R=1', 'W=2, R=1', 'W=2, R=2', 'W=1, R=2'], answer: 2, why: 'W + R = 4 > 3, so the read and write sets always overlap on at least one node.' },
+    { q: 'What does "eventual consistency" promise?', options: ['Reads are always fresh', 'If writes stop, replicas converge to the same value', 'No data is ever lost', 'Writes are instantaneous'], answer: 1, why: 'Replicas may disagree for a while but converge once updates propagate.' },
+  ]}
+/>

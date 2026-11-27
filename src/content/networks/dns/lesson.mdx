@@ -1,0 +1,69 @@
+import { DnsViz3D } from '@/components/lessons/networks/dns/DnsViz3D'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+Computers talk using IP addresses like `93.184.215.14`, but humans remember names like `example.com`. The **Domain Name System (DNS)** translates names into IP addresses. It is a huge, distributed, hierarchical database spread across millions of servers.
+
+<Callout type="analogy">
+DNS is the internet's **phonebook**, but no single book holds every number. Instead you ask a librarian (the **resolver**), who asks the head office (**root**), which says "try the .com department" (**TLD**), which says "ask example.com's own receptionist" (**authoritative server**), who finally gives the number.
+</Callout>
+
+## The hierarchy
+
+Domain names are read **right to left**: `www.example.com.`
+
+- `.` (the invisible dot at the end): the **root**
+- `com`: the **top-level domain (TLD)**
+- `example`: the **second-level domain**, which the owner registers
+- `www`: a **subdomain / host name**
+
+## Watch a lookup
+
+Type any domain and press **Resolve**. Then play the animation:
+
+<DnsViz3D />
+
+Notice the two kinds of queries:
+
+- **Recursive**: your device asks the resolver "get me the *final* answer". The resolver does all the work.
+- **Iterative**: the resolver asks each server, and each one replies with a **referral** ("I don't know, but ask *them*").
+
+<Callout type="tip" title="Caching makes it fast">
+Every answer has a **TTL** (time to live). Resolvers, operating systems and browsers cache answers until the TTL expires. In practice, most lookups are answered from cache in a few milliseconds and never reach the root servers.
+</Callout>
+
+## Common record types
+
+| Type | Maps | Example |
+|---|---|---|
+| **A** | name → IPv4 | `example.com → 93.184.215.14` |
+| **AAAA** | name → IPv6 | `example.com → 2606:2800:21f:cb07:6820:80da:af6b:8b2c` |
+| **CNAME** | alias → canonical name | `www → example.com` |
+| **MX** | domain → mail server | `example.com → 10 mail.example.com` |
+| **NS** | zone → its name servers | `example.com → ns1.example.com` |
+| **TXT** | arbitrary text | SPF, domain verification |
+| **PTR** | IP → name (reverse DNS) | `14.215.184.93.in-addr.arpa → example.com` |
+
+<DeepDive title="Deep dive: transport, security and tools">
+
+- **Transport**: UDP port **53** for most queries; **TCP 53** for responses larger than 512 bytes (or EDNS0 limit) and **zone transfers** (AXFR/IXFR).
+- **Encrypted DNS**: **DoT** (DNS over TLS, port 853) and **DoH** (DNS over HTTPS, port 443) hide queries from on-path observers.
+- **DNSSEC** adds digital signatures (RRSIG, DNSKEY, DS records) so resolvers can verify answers weren't forged. It doesn't encrypt.
+- **Cache poisoning**: an attacker injects forged answers into a resolver's cache (Kaminsky attack, 2008). Mitigated by source-port randomisation and DNSSEC.
+- **Root servers**: 13 *names* (a.root-servers.net … m.root-servers.net), but **1,700+ physical instances** worldwide using **anycast**.
+- **SOA record**: start of authority. It holds the zone's serial number, refresh/retry/expire timers, and negative-caching TTL.
+- **Tools**: `nslookup example.com`, `dig example.com +trace` (shows every referral, just like the animation), `dig -x 8.8.8.8` (reverse lookup).
+- **DHCP** tells your device which resolver to use (option 6).
+
+</DeepDive>
+
+<Quiz
+  slug="dns"
+  questions={[
+    { q: 'Which server type actually holds the A record for example.com?', options: ['Root server', 'TLD server', 'Authoritative name server', 'Your router'], answer: 2, why: 'Root and TLD only refer you onward; the authoritative server for the zone owns the records.' },
+    { q: 'Which DNS record maps a name to an IPv6 address?', options: ['A', 'AAAA', 'MX', 'PTR'], answer: 1, why: 'AAAA ("quad-A") records hold 128-bit IPv6 addresses.' },
+    { q: 'What transport and port do normal DNS queries use?', options: ['TCP 80', 'UDP 53', 'UDP 67', 'TCP 443'], answer: 1, why: 'DNS uses UDP 53 for most queries, falling back to TCP 53 for large responses.' },
+    { q: 'Why don\'t most lookups reach the root servers?', options: ['Root servers are often offline', 'Answers are cached according to their TTL', 'Browsers know all IPs', 'ISPs block them'], answer: 1, why: 'Resolvers cache records (including TLD NS records) for their TTL, so full lookups are rare.' },
+  ]}
+/>

@@ -1,0 +1,58 @@
+import { LoadBalancerViz } from '@/components/lessons/system-design/load-balancing/LoadBalancerViz'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+
+Once you have more than one server, something has to decide **which server handles each request**. That's the **load balancer (LB)**. Clients talk to one address (the LB), and it spreads the work across a pool of servers behind it.
+
+A load balancer gives you:
+
+- **Scale**: add servers to the pool to handle more traffic.
+- **Availability**: **health checks** detect dead servers and stop sending them traffic.
+- **Zero-downtime deploys**: drain one server, update it, put it back.
+
+<Callout type="analogy">
+The host at a busy restaurant. Guests don't pick their own table; the host looks at which waiters are free and seats people so nobody is overwhelmed. If a waiter goes home sick, the host simply stops seating people in their section.
+</Callout>
+
+## Try it
+
+Press **Start traffic** and switch between algorithms. About 1 in 4 requests is "heavy" (takes 6× longer). Watch the **in flight** counts: round robin piles work onto servers that are still busy, while least connections avoids them. Then **click a server** to crash it and see the LB route around it.
+
+<LoadBalancerViz />
+
+## Common algorithms
+
+| Algorithm | How it picks | Best for |
+|---|---|---|
+| Round robin | Next server in turn | Identical servers, similar requests |
+| Weighted round robin | In turn, proportional to weight | Servers of different sizes |
+| Least connections | Fewest active requests | Requests with varying duration (websockets, uploads) |
+| IP hash / consistent hash | hash(client) → server | Sticky sessions, per-user caches |
+| Random / power of two | Pick 2 at random, take the less busy | Huge pools, many LBs without shared state |
+
+<Callout type="warn" title="The load balancer itself can fail">
+A single LB is a single point of failure. Real setups run **two or more** (active-passive with a floating IP, or active-active behind DNS/anycast). Cloud LBs (AWS ALB/NLB, GCP LB) handle this for you.
+</Callout>
+
+<DeepDive title="Deep dive: L4 vs L7, health checks and real tools">
+
+- **Layer 4 LB** (TCP/UDP): routes by IP and port only, without reading the payload. Very fast. Examples: AWS NLB, LVS, Maglev.
+- **Layer 7 LB** (HTTP): reads the request, so it can route `/api/*` to one pool and `/images/*` to another, terminate TLS, add headers, do retries and rate limiting. Examples: Nginx, HAProxy, Envoy, AWS ALB.
+- **Health checks**: active (LB polls `GET /health` every few seconds; mark down after N failures, up after M successes) and passive (watch real traffic for errors/timeouts, sometimes called outlier detection).
+- **Connection draining**: when removing a server, stop sending it new requests but let in-flight ones finish (e.g. 30 s).
+- **Sticky sessions** are a crutch. They break even distribution and you lose sessions when a server dies. Prefer stateless servers.
+- **Global load balancing**: GeoDNS or anycast sends users to the nearest region first, and a regional LB then picks a server.
+- The **weighted** mode in the simulator uses nginx's *smooth weighted round robin*, which interleaves picks (S1, S2, S1, S3, S1, S4…) instead of sending bursts.
+
+</DeepDive>
+
+<Quiz
+  slug="load-balancing"
+  questions={[
+    { q: 'Requests vary a lot in duration. Which algorithm usually spreads load best?', options: ['Round robin', 'Least connections', 'IP hash', 'Random'], answer: 1, why: 'Least connections accounts for how busy each server currently is.' },
+    { q: 'What is a health check for?', options: ['Encrypting traffic', 'Detecting failed servers so the LB stops routing to them', 'Counting users', 'Caching responses'], answer: 1, why: 'Servers that fail health checks are removed from the pool until they recover.' },
+    { q: 'Which LB can route /api and /images to different server pools?', options: ['Layer 4 (TCP)', 'Layer 7 (HTTP)', 'Both equally', 'Neither'], answer: 1, why: 'Only an L7 balancer reads the HTTP request path.' },
+    { q: 'IP hash is mainly used to…', options: ['Balance perfectly evenly', 'Keep each client on the same server', 'Encrypt client IPs', 'Detect failures'], answer: 1, why: 'The same IP always hashes to the same server: sticky sessions or per-client caching.' },
+  ]}
+/>

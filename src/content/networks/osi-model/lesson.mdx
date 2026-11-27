@@ -1,0 +1,68 @@
+import { OsiStack3D } from '@/components/lessons/networks/osi-model/OsiStack3D'
+import { Encapsulation } from '@/components/lessons/networks/osi-model/Encapsulation'
+import { quiz } from './quiz'
+import { Callout } from '@/components/shared/lesson/Callout'
+import { DeepDive } from '@/components/shared/lesson/DeepDive'
+import { Quiz } from '@/components/shared/lesson/Quiz'
+import { PacketHeader } from '@/components/shared/viz/PacketHeader'
+
+Sending a message across the internet is a big job. To make it manageable, networking is split into **layers**. Each layer does one job and only talks to the layers directly above and below it.
+
+The **OSI model** (Open Systems Interconnection) describes **7 layers**. It is a *reference model*: a shared vocabulary that lets engineers say "that's a Layer 2 problem" and be understood straight away.
+
+<Callout type="analogy" title="Analogy: sending a parcel">
+You write a letter (**Application**), put it in an envelope with a name (**Transport**), the post office adds a street address (**Network**), the local van driver knows the next stop (**Data Link**), and the truck physically drives on the road (**Physical**).
+</Callout>
+
+<OsiStack3D />
+
+## The 7 layers
+
+A common way to remember them, from Layer 1 up: **P**lease **D**o **N**ot **T**hrow **S**ausage **P**izza **A**way.
+
+| # | Layer | What it does | PDU | Examples |
+|---|---|---|---|---|
+| 7 | Application | Services apps use | Data | HTTP, DNS, SMTP |
+| 6 | Presentation | Encoding, encryption | Data | TLS, JPEG, UTF-8 |
+| 5 | Session | Manages conversations | Data | RPC, sockets |
+| 4 | Transport | Process-to-process delivery, ports | Segment | TCP, UDP |
+| 3 | Network | Logical addressing, routing | Packet | IP, ICMP |
+| 2 | Data Link | Next-hop delivery, MAC addresses | Frame | Ethernet, Wi-Fi |
+| 1 | Physical | Signals on the medium | Bits | Cables, radio |
+
+## Encapsulation
+
+As data moves **down** the stack on the sender, each layer wraps it with its own **header**. This is called **encapsulation**. The receiver does the reverse, **decapsulation**, removing one header per layer on the way **up**.
+
+<Encapsulation />
+
+<Callout type="tip">
+Each layer only reads **its own header**. The IP layer doesn't care what is inside the TCP segment, and the switch doesn't care what is inside the IP packet. This separation is what lets you swap Wi-Fi for Ethernet without changing your browser.
+</Callout>
+
+## OSI vs TCP/IP
+
+The internet actually runs on the **TCP/IP model**, which has 4 layers. OSI is still used to *talk about* networks. Toggle **Compare with TCP/IP** in the 3D view above to see how the two line up.
+
+<DeepDive title="Deep dive: what's really in the headers">
+
+Turn on Deep Dive in the top bar to see header details in every animation. Here is a real Ethernet II frame header (click the fields):
+
+<PacketHeader
+  title="Ethernet II header (14 bytes) + FCS"
+  color="#3b82f6"
+  fields={[
+    { name: 'Destination MAC', bits: 48, value: 'aa:bb:cc:dd:ee:ff', desc: 'MAC address of the next-hop device on this link (not the final destination if routed).' },
+    { name: 'Source MAC', bits: 48, value: '11:22:33:44:55:66', desc: 'MAC of the sending interface. Switches learn from this field.' },
+    { name: 'EtherType', bits: 16, value: '0x0800', desc: 'Which protocol is inside: 0x0800 IPv4, 0x86DD IPv6, 0x0806 ARP, 0x8100 802.1Q VLAN tag.' },
+    { name: 'FCS', bits: 32, value: 'CRC-32', desc: 'Frame Check Sequence. Actually a trailer after the payload. Frames with a bad FCS are silently dropped.' },
+  ]}
+/>
+
+- **MTU**: Ethernet payload is max **1500 bytes**. Larger IP packets must be fragmented (IPv4) or rejected (IPv6, uses PMTUD).
+- **Same-layer communication**: each layer is *logically* talking to the same layer on the other host. Physically, everything travels down, across, and back up.
+- Devices by layer: **hubs** (L1), **switches** (L2), **routers** (L3), **firewalls/load balancers** (L3–L7).
+
+</DeepDive>
+
+<Quiz slug="osi-model" questions={quiz} />
