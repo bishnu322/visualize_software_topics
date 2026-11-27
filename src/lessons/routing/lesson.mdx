@@ -1,0 +1,72 @@
+import { RoutingViz } from './RoutingViz'
+import { RouteLookup } from './RouteLookup'
+import { Callout } from '@/components/lesson/Callout'
+import { DeepDive } from '@/components/lesson/DeepDive'
+import { Quiz } from '@/components/lesson/Quiz'
+
+Switches move frames *within* a network. **Routers** move packets *between* networks. Every router keeps a **routing table**: a list of known networks and where to send packets for each one.
+
+When a packet arrives, the router:
+
+1. Reads the **destination IP** from the IP header.
+2. Finds the **best matching route** in its table.
+3. Sends the packet out of that route's interface toward the **next hop**.
+4. Decrements the **TTL**, and builds a brand-new Layer 2 frame for the next link.
+
+<Callout type="analogy">
+A router is like a road sign at a junction. It doesn't know the whole route to your destination. It only knows "for Kathmandu, take the left road". Each junction along the way makes its own decision. That's called **hop-by-hop** forwarding.
+</Callout>
+
+## Where do routes come from?
+
+- **Directly connected** (`C`): networks on the router's own interfaces.
+- **Static** (`S`): typed in by an admin. Simple and predictable, but doesn't adapt to failures.
+- **Default route** (`S*`, `0.0.0.0/0`): "if nothing else matches, send it here". Usually toward the ISP.
+- **Dynamic** (`O` for OSPF, `R` for RIP, `D` for EIGRP, `B` for BGP): routers talk to each other and learn routes automatically, re-routing around failures.
+
+## Choosing a route: longest prefix match
+
+Several routes can match the same destination. The router always picks the **most specific** one, the one with the **longest prefix**.
+
+<RouteLookup />
+
+## Finding the best path: Dijkstra
+
+Link-state protocols like **OSPF** give every router a complete map of the network. Each router then runs **Dijkstra's shortest path first (SPF)** algorithm to calculate the cheapest path to every destination. The *cost* is usually based on link bandwidth: faster links are cheaper.
+
+<RoutingViz />
+
+<DeepDive title="Deep dive: AD, metrics, and protocol families">
+
+**Choosing between routes, in order:**
+
+1. **Longest prefix match** always wins first.
+2. Same prefix from different sources → lowest **Administrative Distance** (trust level): Connected 0, Static 1, eBGP 20, EIGRP 90, OSPF 110, IS-IS 115, RIP 120, iBGP 200.
+3. Same source → lowest **metric**: OSPF cost (reference bw ÷ interface bw, default 100 Mbps), RIP hop count (max 15), EIGRP composite (bandwidth + delay).
+4. Equal metric → **ECMP** load balancing.
+
+**Protocol families:**
+
+| Type | How it works | Examples |
+|---|---|---|
+| Distance vector | Tell neighbours your table ("routing by rumour") | RIP, (EIGRP = advanced DV) |
+| Link state | Flood LSAs, everyone builds the full map, runs SPF | OSPF, IS-IS |
+| Path vector | Exchange full AS paths, policy-driven | BGP (the internet's routing protocol) |
+
+**IGP vs EGP**: OSPF/EIGRP/IS-IS run *inside* an organisation (Autonomous System). **BGP** runs *between* ASes and holds ~1,000,000 IPv4 prefixes in the global table.
+
+**OSPF specifics**: areas (backbone area 0), DR/BDR election on multi-access networks, Hello 10 s / Dead 40 s on broadcast links, neighbor states Down → Init → 2-Way → ExStart → Exchange → Loading → Full.
+
+**Cisco**: `show ip route`, `ip route 0.0.0.0 0.0.0.0 203.0.113.1`, `router ospf 1` → `network 10.0.0.0 0.255.255.255 area 0`.
+
+</DeepDive>
+
+<Quiz
+  slug="routing"
+  questions={[
+    { q: 'A router has routes 10.0.0.0/8 and 10.1.0.0/16. Where does it send a packet for 10.1.2.3?', options: ['10.0.0.0/8 (it was added first)', '10.1.0.0/16 (longer prefix)', 'Both (load balancing)', 'Default route'], answer: 1, why: 'Longest prefix match: /16 is more specific than /8.' },
+    { q: 'What does 0.0.0.0/0 represent?', options: ['An invalid route', 'The loopback', 'The default route (matches everything)', 'Broadcast'], answer: 2, why: 'A /0 prefix has zero network bits, so it matches any address. It\'s the "gateway of last resort".' },
+    { q: 'Which algorithm does OSPF use to compute best paths?', options: ['Bellman-Ford', 'Dijkstra (SPF)', 'Spanning tree', 'Round robin'], answer: 1, why: 'OSPF is link-state: every router runs Dijkstra on its link-state database.' },
+    { q: 'What does a router change in a packet at every hop?', options: ['Destination IP', 'Source IP', 'TTL (and the Layer 2 frame)', 'TCP port'], answer: 2, why: 'TTL is decremented and a new frame with new MACs is built. IP addresses stay the same (unless NAT is used).' },
+  ]}
+/>
