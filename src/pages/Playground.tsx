@@ -1,4 +1,5 @@
 import { usePlayground } from '@/components/playground/usePlayground'
+import { PlaygroundTabs } from '@/components/playground/PlaygroundTabs'
 import { ModeHint, PlaygroundToolbar } from '@/components/playground/PlaygroundToolbar'
 import { PlaygroundScene } from '@/components/playground/PlaygroundScene'
 import { PingPanel } from '@/components/playground/PingPanel'
@@ -8,7 +9,8 @@ export default function Playground() {
   const pg = usePlayground()
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
-      <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Network Playground</h1>
+      <PlaygroundTabs />
+      <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Network Playground</h1>
       <p className="mt-1 text-slate-600 dark:text-slate-400">Build your own topology, cable it up, and ping between devices. Your network is saved in this browser.</p>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">

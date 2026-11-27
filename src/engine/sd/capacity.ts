@@ -27,14 +27,18 @@ export interface Metrics {
 
 const BASE_LATENCY = 40
 
+/** M/M/1 queueing: response time grows by 1 / (1 − ρ). Capped at ρ = 0.95 so it stays finite. */
+export function queueingFactor(utilisation: number): number {
+  return 1 / (1 - Math.min(Math.max(utilisation, 0), 0.95))
+}
+
 /**
  * Latency rises sharply as utilisation approaches 100% (queueing theory, M/M/1: W = S / (1 − ρ)).
  * Above capacity, the excess requests fail.
  */
 export function metrics(rps: number, capacity: number, cost: number): Metrics {
   const utilisation = capacity > 0 ? rps / capacity : Infinity
-  const rho = Math.min(utilisation, 0.95)
-  const latencyMs = Math.round(BASE_LATENCY / (1 - rho))
+  const latencyMs = Math.round(BASE_LATENCY * queueingFactor(utilisation))
   const errorRate = utilisation > 1 ? (rps - capacity) / rps : 0
   return { capacity, utilisation, latencyMs, errorRate, cost }
 }

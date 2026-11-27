@@ -1,4 +1,4 @@
-import { FlaskConical, Home } from 'lucide-react'
+import { Boxes, FlaskConical, Home } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import clsx from 'clsx'
 import { COURSES } from '@/content/registry'
@@ -20,8 +20,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <NavLink to="/" end className={link} onClick={onNavigate}>
         <Home size={16} /> Home
       </NavLink>
-      <NavLink to="/playground" className={link} onClick={onNavigate}>
-        <FlaskConical size={16} /> Playground
+      <NavLink to="/playground" end className={link} onClick={onNavigate}>
+        <FlaskConical size={16} /> Network Playground
+      </NavLink>
+      <NavLink to="/playground/system-design" className={link} onClick={onNavigate}>
+        <Boxes size={16} /> System Design Playground
       </NavLink>
       <div className="mt-4 px-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Courses</div>
       {COURSES.map((c) => (

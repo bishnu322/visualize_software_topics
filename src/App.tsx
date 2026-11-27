@@ -8,6 +8,7 @@ import NotFound from '@/pages/NotFound'
 
 const TopicPage = lazy(() => import('@/pages/TopicPage'))
 const Playground = lazy(() => import('@/pages/Playground'))
+const SystemDesignPlayground = lazy(() => import('@/pages/SystemDesignPlayground'))
 
 export default function App() {
   useThemeSync()
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="learn/:course/:slug" element={<TopicPage />} />
             <Route path="learn/:param" element={<LearnRedirect />} />
             <Route path="playground" element={<Playground />} />
+            <Route path="playground/system-design" element={<SystemDesignPlayground />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
